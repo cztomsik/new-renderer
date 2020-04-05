@@ -6,20 +6,24 @@ mod render;
 
 use crate::commons::{Bounds, Color, Pos};
 use crate::render::backend::raqote::RaqoteBackend;
-use crate::render::Renderer;
+use crate::render::{Renderer, Child};
 
 fn main() {
     let mut r = Renderer::new(RaqoteBackend::new("out.png".to_string(), 800, 600));
-    let c = r.create_container(0);
+    let parent = r.create_container(0);
+    let child = r.create_container(1);
 
-    r.set_background_color(c, Color { r: 255, g: 0, b: 0, a: 255 });
+    r.insert_child(parent, 0, Child::Container(child));
+
+    r.set_background_color(parent, Color { r: 255, g: 0, b: 0, a: 255 });
+    r.set_background_color(child, Color { r: 255, g: 255, b: 0, a: 255 });
 
     r.render_container(
-        c,
-        &vec![Bounds {
-            a: Pos::ZERO,
-            b: Pos { x: 100., y: 100. },
-        }],
+        parent,
+        &vec![
+            Bounds { a: Pos::ZERO, b: Pos { x: 100., y: 100. } },
+            Bounds { a: Pos { x: 50., y: 50. }, b: Pos { x: 150., y: 150. } },
+        ],
     );
 
     /*

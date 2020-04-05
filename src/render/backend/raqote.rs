@@ -25,7 +25,7 @@ impl RenderBackend for RaqoteBackend {
 
     fn push_rect(&mut self, bounds: Bounds, color: Color) {
         let mut pb = PathBuilder::new();
-        pb.rect(40., 40., 120., 120.);
+        pb.rect(bounds.a.x, bounds.a.y, bounds.width(), bounds.height());
         self.dt.fill(&pb.finish(), &Source::Solid(color.into()), &DrawOptions::new());
     }
 

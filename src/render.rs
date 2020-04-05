@@ -24,7 +24,7 @@ pub struct Renderer<RB: RenderBackend, LK> {
     keys: Vec<LK>,
 }
 
-impl<RB: RenderBackend, LK> Renderer<RB, LK> {
+impl<RB: RenderBackend, LK: Copy> Renderer<RB, LK> {
     pub fn new(backend: RB) -> Self {
         Self {
             backend,
@@ -35,7 +35,7 @@ impl<RB: RenderBackend, LK> Renderer<RB, LK> {
 
     // container
     pub fn create_container(&mut self, layout_key: LK) -> ContainerId {
-        self.ui_state.create_container()
+        self.ui_state.create_container(layout_key)
     }
 
     pub fn insert_child(&mut self, container: ContainerId, index: usize, child: Child) {
@@ -88,9 +88,6 @@ impl<RB: RenderBackend, LK> Renderer<RB, LK> {
         self.ui_state.colors[container.0] = value;
     }
 
-    // TODO: children
-    //pub fn set_(&mut self) {}
-
     pub fn set_border(&mut self, container: ContainerId, value: Option<Border>) {
         self.ui_state.borders[container.0] = value;
     }
@@ -112,7 +109,7 @@ impl<RB: RenderBackend, LK> Renderer<RB, LK> {
             backend: &mut self.backend,
             ui_state: &self.ui_state,
             bounds,
-            current_bounds: Bounds::ZERO,
+            current_bounds: bounds[self.ui_state.layout_keys[container.0]],
         };
 
         ctx.render_container(container);
@@ -149,7 +146,7 @@ struct UiState<LK> {
     borders: Vec<Option<Border>>,
 }
 
-impl<LK> UiState<LK> {
+impl<LK: Copy> UiState<LK> {
     fn new() -> Self {
         Self {
             layout_keys: Vec::new(),
@@ -167,9 +164,10 @@ impl<LK> UiState<LK> {
         }
     }
 
-    fn create_container(&mut self) -> ContainerId {
+    fn create_container(&mut self, layout_key: LK) -> ContainerId {
         // TODO: maybe defaults shouldn't be here
         // (accept some ContainerState?)
+        self.layout_keys.push(layout_key);
         self.children.push(Vec::new());
         self.overflows.push(Overflow::Visible);
         self.opacities.push(1.);
@@ -193,7 +191,7 @@ struct RenderContext<'a, RB: RenderBackend, LK, BS: Index<LK, Output = Bounds>> 
     current_bounds: Bounds,
 }
 
-impl<RB: RenderBackend, LK, BS: Index<LK, Output = Bounds>> RenderContext<'_, RB, LK, BS> {
+impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<'_, RB, LK, BS> {
     fn render_container(&mut self, container: ContainerId) {
         // TODO: transform
         // TODO: overflow (scroll)
@@ -221,11 +219,19 @@ impl<RB: RenderBackend, LK, BS: Index<LK, Output = Bounds>> RenderContext<'_, RB
             self.render_inset_shadow(s);
         }
 
+        println!("{:#?}", &self.ui_state.children[container.0]);
+
         // TODO: translate & restore bounds
         for ch in &self.ui_state.children[container.0] {
-            println!("{:?}", &ch);
             match ch {
-                Child::Container(child_ct) => self.render_container(*child_ct),
+                Child::Container(child_ct) => {
+                    let prev_bounds = self.current_bounds;
+                    self.current_bounds = self.bounds[self.ui_state.layout_keys[child_ct.0]].relative_to(self.current_bounds.a);
+
+                    self.render_container(*child_ct);
+
+                    self.current_bounds = prev_bounds;
+                },
                 Child::Text(child_text) => self.render_text(*child_text),
             }
         }
@@ -283,7 +289,26 @@ mod tests {
     }
 
     #[test]
-    fn children() {}
+    fn children() {
+        let mut r = create_test_renderer();
+        let parent = r.create_container(0);
+        let child = r.create_container(1);
+
+        r.insert_child(parent, 0, Child::Container(child));
+
+        r.set_background_color(parent, Color { r: 255, g: 0, b: 0, a: 255 });
+        r.set_background_color(child, Color { r: 255, g: 255, b: 0, a: 255 });
+
+        r.render_container(
+            parent,
+            &vec![
+                Bounds { a: Pos::ZERO, b: Pos { x: 100., y: 100. } },
+                Bounds { a: Pos { x: 50., y: 50. }, b: Pos { x: 150., y: 150. } },
+            ],
+        );
+
+        assert_eq!(r.backend.log, vec!["clear", "render"]);
+    }
 
     #[test]
     fn it_works() {
@@ -360,7 +385,7 @@ mod tests {
         assert_eq!(r.backend.log, vec!["clear", "render"]);
     }
 
-    fn create_test_renderer<LK>() -> Renderer<TestRenderBackend, LK> {
+    fn create_test_renderer<LK: Copy>() -> Renderer<TestRenderBackend, LK> {
         Renderer::new(TestRenderBackend { log: Vec::new() })
     }
 

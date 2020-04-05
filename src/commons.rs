@@ -42,6 +42,14 @@ pub struct Bounds {
 impl Bounds {
     pub const ZERO: Bounds = Self { a: Pos::ZERO, b: Pos::ZERO };
 
+    pub fn width(&self) -> Au {
+        self.b.x - self.a.x
+    }
+
+    pub fn height(&self) -> Au {
+        self.b.y - self.a.y
+    }
+
     pub fn mul(&self, n: Au) -> Bounds {
         let a = self.a.mul(n);
         let b = self.b.mul(n);

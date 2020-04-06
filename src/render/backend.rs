@@ -1,4 +1,5 @@
-use crate::commons::{Bounds, Color};
+use super::Color;
+use crate::commons::Bounds;
 
 /// Low-level renderer, specific to the given graphics api (OpenGL/Vulkan/SW)
 /// Knows how to draw primitives, prepared by higher-level `Renderer`

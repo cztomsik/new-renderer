@@ -1,9 +1,9 @@
 use super::{ContainerId, TextId};
-use crate::commons::{Color, Pos};
+use crate::commons::Pos;
 
 // value types
 // part of the public interface but not necessarily how it's stored internally
-// similar to respective CSS properties but not the same
+// often similar to respective CSS properties but not the same
 // (dimensions are absolute, granularity is different, etc.)
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -13,7 +13,7 @@ pub enum Child {
 }
 
 // TODO: should be (f32, f32)
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct BorderRadius {
     pub top_left: f32,
     pub top_right: f32,
@@ -21,14 +21,14 @@ pub struct BorderRadius {
     pub bottom_left: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Overflow {
     Visible,
     Hidden,
     Scroll,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OutlineShadow {
     pub offset: Pos,
     pub blur: f32,
@@ -36,41 +36,85 @@ pub struct OutlineShadow {
     pub color: Color,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Outline {
     pub width: f32,
-    pub style: BorderStyle,
+    pub style: OutlineStyle,
     pub color: Color,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OutlineStyle {
+    Solid,
+}
+
+/// Packed color
+/// note that u32 could improve interop or CPU but GPU is float-only
+/// and bitwise ops are slow so it still needs to be unpacked during
+/// `VertexAttribPointer()` as it is done now
+#[derive(Debug, Clone, Copy)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Color {
+    pub const TRANSPARENT: Color = Self { r: 0, g: 0, b: 0, a: 0 };
+    pub const BLACK: Color = Self { r: 0, g: 0, b: 0, a: 255 };
+    pub const WHITE: Color = Self {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    };
+
+    // just to make testing & prototyping a bit easier
+    pub const RED: Color = Self { r: 255, g: 0, b: 0, a: 255 };
+    pub const GREEN: Color = Self { r: 0, g: 255, b: 0, a: 255 };
+    pub const BLUE: Color = Self { r: 0, g: 0, b: 255, a: 255 };
+    pub const YELLOW: Color = Self {
+        r: 255,
+        g: 255,
+        b: 0,
+        a: 255,
+    };
+
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum BackgroundImage {
     Image {},
     LinearGradient {},
     RadialGradient {},
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Border {
-    pub top: BorderSide,
-    pub right: BorderSide,
-    pub bottom: BorderSide,
-    pub left: BorderSide,
+    pub top: Option<BorderSide>,
+    pub right: Option<BorderSide>,
+    pub bottom: Option<BorderSide>,
+    pub left: Option<BorderSide>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct BorderSide {
     pub width: f32,
     pub style: BorderStyle,
     pub color: Color,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BorderStyle {
+    None,
     Solid,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct InsetShadow {
     pub offset: Pos,
     pub blur: f32,

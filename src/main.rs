@@ -4,9 +4,9 @@ mod render;
 //use sdl2::event::Event;
 //use sdl2::keyboard::Keycode;
 
-use crate::commons::{Bounds, Color, Pos};
+use crate::commons::{Bounds, Pos};
 use crate::render::backend::raqote::RaqoteBackend;
-use crate::render::{Renderer, Child};
+use crate::render::{Border, BorderSide, BorderStyle, Child, Color, Outline, OutlineShadow, OutlineStyle, Renderer};
 
 fn main() {
     let mut r = Renderer::new(RaqoteBackend::new("out.png".to_string(), 800, 600));
@@ -15,14 +15,56 @@ fn main() {
 
     r.insert_child(parent, 0, Child::Container(child));
 
-    r.set_background_color(parent, Color { r: 255, g: 0, b: 0, a: 255 });
-    r.set_background_color(child, Color { r: 255, g: 255, b: 0, a: 255 });
+    r.set_background_color(parent, Color::RED);
+    r.set_border(
+        parent,
+        Some(Border {
+            top: None,
+            right: None,
+            bottom: Some(BorderSide {
+                width: 1.,
+                style: BorderStyle::Solid,
+                color: Color::WHITE,
+            }),
+            left: None,
+        }),
+    );
+
+    r.set_background_color(child, Color::GREEN);
+    r.set_outline(
+        child,
+        Some(Outline {
+            width: 1.,
+            style: OutlineStyle::Solid,
+            color: Color::BLUE,
+        }),
+    );
+    r.set_outline_shadows(
+        child,
+        vec![OutlineShadow {
+            offset: Pos::ZERO,
+            blur: 0.,
+            spread: 5.,
+            color: Color {
+                r: 127,
+                g: 127,
+                b: 127,
+                a: 127,
+            },
+        }],
+    );
 
     r.render_container(
         parent,
         &vec![
-            Bounds { a: Pos::ZERO, b: Pos { x: 100., y: 100. } },
-            Bounds { a: Pos { x: 50., y: 50. }, b: Pos { x: 150., y: 150. } },
+            Bounds {
+                a: Pos::ZERO,
+                b: Pos { x: 100., y: 100. },
+            },
+            Bounds {
+                a: Pos { x: 50., y: 50. },
+                b: Pos { x: 150., y: 150. },
+            },
         ],
     );
 
@@ -47,4 +89,3 @@ fn main() {
         }
     */
 }
-

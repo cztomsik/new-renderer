@@ -5,8 +5,17 @@
 
 #![allow(unused_variables, dead_code)]
 
-use crate::commons::{Bounds, Color, Pos};
+use crate::commons::{Bounds, Pos};
 use std::ops::Index;
+
+// handles
+// public but opaque types
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContainerId(usize);
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextId(usize);
 
 // re-export value types
 mod value_types;
@@ -102,7 +111,7 @@ impl<RB: RenderBackend, LK: Copy> Renderer<RB, LK> {
     pub fn set_text_data(/* TODO: texture + glyphs */) {}
 
     pub fn render_container(&mut self, container: ContainerId, bounds: &impl Index<LK, Output = Bounds>) {
-        // TODO: optimize transforms (keep ops/pipeline)
+        // TODO: keep ops/pipeline if only transforms were changed
         self.backend.clear();
 
         let mut ctx = RenderContext {
@@ -117,15 +126,6 @@ impl<RB: RenderBackend, LK: Copy> Renderer<RB, LK> {
         self.backend.render();
     }
 }
-
-// handles
-// public but opaque types
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ContainerId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TextId(usize);
 
 // internal impl starts here
 
@@ -196,13 +196,13 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
         // TODO: transform
         // TODO: overflow (scroll)
         // TODO: opacity
-        // TODO: border_radius (clip downwards, (border, shadow only on this level))
+        // TODO: border_radius (clip downwards, (border/shadow only on this level))
 
         for s in &self.ui_state.outline_shadows[container.0] {
             self.render_outline_shadow(s);
         }
 
-        for o in &self.ui_state.outlines[container.0] {
+        if let Some(o) = &self.ui_state.outlines[container.0] {
             self.render_outline(o);
         }
 
@@ -221,28 +221,81 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
 
         println!("{:#?}", &self.ui_state.children[container.0]);
 
-        // TODO: translate & restore bounds
         for ch in &self.ui_state.children[container.0] {
+            let prev_bounds = self.current_bounds;
+
             match ch {
                 Child::Container(child_ct) => {
-                    let prev_bounds = self.current_bounds;
                     self.current_bounds = self.bounds[self.ui_state.layout_keys[child_ct.0]].relative_to(self.current_bounds.a);
-
                     self.render_container(*child_ct);
-
-                    self.current_bounds = prev_bounds;
-                },
+                }
                 Child::Text(child_text) => self.render_text(*child_text),
             }
+
+            self.current_bounds = prev_bounds;
+        }
+
+        if let Some(b) = &self.ui_state.borders[container.0] {
+            self.render_border(b);
         }
     }
 
     fn render_outline_shadow(&mut self, shadow: &OutlineShadow) {
-        println!("TODO: render_outline_shadow");
+        if shadow.blur != 0. {
+            println!("TODO: OutlineShadow blur");
+        }
+
+        self.backend.push_rect(self.current_bounds.inflate_uniform(shadow.spread), shadow.color);
     }
 
     fn render_outline(&mut self, outline: &Outline) {
-        println!("TODO: render_outline");
+        let Outline { width, color, .. } = *outline;
+        let Bounds { a, b } = self.current_bounds;
+
+        // top
+        self.backend.push_rect(
+            Bounds {
+                a,
+                b: Pos {
+                    x: b.x + width,
+                    y: a.y - width,
+                },
+            },
+            color,
+        );
+
+        // right
+        self.backend.push_rect(
+            Bounds {
+                a: Pos { x: b.x + width, y: a.y },
+                b: Pos { x: b.x, y: b.y + width },
+            },
+            color,
+        );
+
+        // bottom
+        self.backend.push_rect(
+            Bounds {
+                a: Pos {
+                    x: a.x - width,
+                    y: b.y + width,
+                },
+                b,
+            },
+            color,
+        );
+
+        // left
+        self.backend.push_rect(
+            Bounds {
+                a: Pos {
+                    x: a.x - width,
+                    y: a.y - width,
+                },
+                b: Pos { x: a.x, y: b.y },
+            },
+            color,
+        );
     }
 
     fn render_background_color(&mut self, color: Color) {
@@ -269,8 +322,63 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
 
     //fn render_text_shadow(&mut self) {}
 
-    fn render_border(&mut self, border: Border) {
-        println!("TODO: render_border");
+    fn render_border(&mut self, border: &Border) {
+        // note the border is always inside (it acts like padding in layout)
+
+        // TODO: border_radius
+
+        // TODO: corners (overdraw will be visible with alpha colors)
+        // TODO: different edge colors (push_triangle)
+
+        let Bounds { a, b } = self.current_bounds;
+
+        if let Some(BorderSide { width, style, color }) = border.top {
+            if style == BorderStyle::Solid {
+                self.backend.push_rect(
+                    Bounds {
+                        a,
+                        b: Pos { x: b.x, y: a.y + width },
+                    },
+                    color,
+                )
+            }
+        }
+
+        if let Some(BorderSide { width, style, color }) = border.right {
+            if style == BorderStyle::Solid {
+                self.backend.push_rect(
+                    Bounds {
+                        a: Pos { x: b.x - width, y: a.y },
+                        b,
+                    },
+                    color,
+                )
+            }
+        }
+
+        if let Some(BorderSide { width, style, color }) = border.bottom {
+            if style == BorderStyle::Solid {
+                self.backend.push_rect(
+                    Bounds {
+                        a: Pos { x: a.x, y: b.y - width },
+                        b,
+                    },
+                    color,
+                )
+            }
+        }
+
+        if let Some(BorderSide { width, style, color }) = border.left {
+            if style == BorderStyle::Solid {
+                self.backend.push_rect(
+                    Bounds {
+                        a,
+                        b: Pos { x: a.x + width, y: b.y },
+                    },
+                    color,
+                )
+            }
+        }
     }
 }
 
@@ -289,6 +397,64 @@ mod tests {
     }
 
     #[test]
+    fn outline() {
+        let mut r = create_test_renderer();
+        let c = r.create_container(0);
+
+        r.set_outline(
+            c,
+            Some(Outline {
+                width: 1.,
+                style: OutlineStyle::Solid,
+                color: Color::BLUE,
+            }),
+        );
+        r.render_container(
+            c,
+            &vec![Bounds {
+                a: Pos::ZERO,
+                b: Pos { x: 100., y: 100. },
+            }],
+        );
+
+        assert_eq!(
+            r.backend.log,
+            vec![
+                "clear",
+                "push_rect Bounds((0.0, 0.0), (101.0, -1.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
+                "push_rect Bounds((101.0, 0.0), (100.0, 101.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
+                "push_rect Bounds((-1.0, 101.0), (100.0, 100.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
+                "push_rect Bounds((-1.0, -1.0), (0.0, 100.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
+                "render"
+            ]
+        );
+    }
+
+    #[test]
+    fn background_color() {
+        let mut r = create_test_renderer();
+        let c = r.create_container(0);
+
+        r.set_background_color(c, Color::GREEN);
+        r.render_container(
+            c,
+            &vec![Bounds {
+                a: Pos::ZERO,
+                b: Pos { x: 100., y: 100. },
+            }],
+        );
+
+        assert_eq!(
+            r.backend.log,
+            vec![
+                "clear",
+                "push_rect Bounds((0.0, 0.0), (100.0, 100.0)) Color { r: 0, g: 255, b: 0, a: 255 }",
+                "render"
+            ]
+        );
+    }
+
+    #[test]
     fn children() {
         let mut r = create_test_renderer();
         let parent = r.create_container(0);
@@ -296,18 +462,30 @@ mod tests {
 
         r.insert_child(parent, 0, Child::Container(child));
 
-        r.set_background_color(parent, Color { r: 255, g: 0, b: 0, a: 255 });
-        r.set_background_color(child, Color { r: 255, g: 255, b: 0, a: 255 });
+        r.set_background_color(child, Color { r: 255, g: 0, b: 0, a: 255 });
 
         r.render_container(
             parent,
             &vec![
-                Bounds { a: Pos::ZERO, b: Pos { x: 100., y: 100. } },
-                Bounds { a: Pos { x: 50., y: 50. }, b: Pos { x: 150., y: 150. } },
+                Bounds {
+                    a: Pos::ZERO,
+                    b: Pos { x: 100., y: 100. },
+                },
+                Bounds {
+                    a: Pos { x: 50., y: 50. },
+                    b: Pos { x: 150., y: 150. },
+                },
             ],
         );
 
-        assert_eq!(r.backend.log, vec!["clear", "render"]);
+        assert_eq!(
+            r.backend.log,
+            vec![
+                "clear",
+                "push_rect Bounds((50.0, 50.0), (150.0, 150.0)) Color { r: 255, g: 0, b: 0, a: 255 }",
+                "render"
+            ]
+        );
     }
 
     #[test]
@@ -339,7 +517,7 @@ mod tests {
             c,
             Some(Outline {
                 width: 1.,
-                style: BorderStyle::Solid,
+                style: OutlineStyle::Solid,
                 color: Color::BLACK,
             }),
         );
@@ -357,32 +535,47 @@ mod tests {
         r.set_border(
             c,
             Some(Border {
-                top: BorderSide {
+                top: Some(BorderSide {
                     width: 1.,
                     style: BorderStyle::Solid,
-                    color: Color::BLACK,
-                },
-                right: BorderSide {
+                    color: Color::RED,
+                }),
+                right: Some(BorderSide {
                     width: 1.,
                     style: BorderStyle::Solid,
-                    color: Color::BLACK,
-                },
-                bottom: BorderSide {
+                    color: Color::GREEN,
+                }),
+                bottom: Some(BorderSide {
                     width: 1.,
                     style: BorderStyle::Solid,
-                    color: Color::BLACK,
-                },
-                left: BorderSide {
+                    color: Color::BLUE,
+                }),
+                left: Some(BorderSide {
                     width: 1.,
                     style: BorderStyle::Solid,
-                    color: Color::BLACK,
-                },
+                    color: Color::YELLOW,
+                }),
             }),
         );
 
         r.render_container(c, &vec![Bounds::ZERO]);
 
-        assert_eq!(r.backend.log, vec!["clear", "render"]);
+        assert_eq!(
+            r.backend.log,
+            vec![
+                "clear",
+                "push_rect Bounds((0.0, 0.0), (1.0, -1.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
+                "push_rect Bounds((1.0, 0.0), (0.0, 1.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
+                "push_rect Bounds((-1.0, 1.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
+                "push_rect Bounds((-1.0, -1.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
+                "push_rect Bounds((0.0, 0.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
+                "push_rect Bounds((0.0, 0.0), (0.0, 1.0)) Color { r: 255, g: 0, b: 0, a: 255 }",
+                "push_rect Bounds((-1.0, 0.0), (0.0, 0.0)) Color { r: 0, g: 255, b: 0, a: 255 }",
+                "push_rect Bounds((0.0, -1.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
+                "push_rect Bounds((0.0, 0.0), (1.0, 0.0)) Color { r: 255, g: 255, b: 0, a: 255 }",
+                "render"
+            ]
+        );
     }
 
     fn create_test_renderer<LK: Copy>() -> Renderer<TestRenderBackend, LK> {

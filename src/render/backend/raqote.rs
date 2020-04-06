@@ -1,5 +1,5 @@
-use super::RenderBackend;
-use crate::commons::{Bounds, Color};
+use super::{Color, RenderBackend};
+use crate::commons::Bounds;
 use raqote::*;
 
 // temporary backend just to test the renderer works properly

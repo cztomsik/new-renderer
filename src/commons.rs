@@ -1,10 +1,12 @@
 // common types & things used everywhere
 
+use std::fmt::{Debug, Error, Formatter};
+
 /// Application unit (or something similar, unit of measure)
 pub type Au = f32;
 
 /// 2D Point
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Pos {
     pub x: Au,
     pub y: Au,
@@ -12,10 +14,6 @@ pub struct Pos {
 
 impl Pos {
     pub const ZERO: Pos = Self { x: 0., y: 0. };
-
-    pub fn new(x: Au, y: Au) -> Self {
-        Self { x, y }
-    }
 
     pub fn mul(&self, n: Au) -> Pos {
         Pos {
@@ -32,8 +30,14 @@ impl Pos {
     }
 }
 
+impl Debug for Pos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.debug_tuple("").field(&self.x).field(&self.y).finish()
+    }
+}
+
 /// Bounding box defined by two points
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Bounds {
     pub a: Pos,
     pub b: Pos,
@@ -42,19 +46,36 @@ pub struct Bounds {
 impl Bounds {
     pub const ZERO: Bounds = Self { a: Pos::ZERO, b: Pos::ZERO };
 
+    #[inline]
     pub fn width(&self) -> Au {
         self.b.x - self.a.x
     }
 
+    #[inline]
     pub fn height(&self) -> Au {
         self.b.y - self.a.y
     }
 
+    #[must_use]
     pub fn mul(&self, n: Au) -> Bounds {
         let a = self.a.mul(n);
         let b = self.b.mul(n);
 
         Bounds { a, b }
+    }
+
+    #[must_use]
+    pub fn inflate_uniform(&self, n: Au) -> Self {
+        Self {
+            a: Pos {
+                x: self.a.x - n,
+                y: self.a.y - n,
+            },
+            b: Pos {
+                x: self.b.x + n,
+                y: self.b.y + n,
+            },
+        }
     }
 
     pub fn center(&self) -> Pos {
@@ -77,23 +98,8 @@ impl Bounds {
     }
 }
 
-/// Packed color
-/// note that u32 could improve interop or CPU but GPU is float-only
-/// and bitwise ops are slow so it still needs to be unpacked during
-/// `VertexAttribPointer()` as it is done now
-#[derive(Debug, Clone, Copy)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8,
-}
-
-impl Color {
-    pub const TRANSPARENT: Color = Self { r: 0, g: 0, b: 0, a: 0 };
-    pub const BLACK: Color = Self { r: 0, g: 0, b: 0, a: 255 };
-
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self { r, g, b, a }
+impl Debug for Bounds {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.debug_tuple("Bounds").field(&self.a).field(&self.b).finish()
     }
 }

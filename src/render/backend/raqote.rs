@@ -62,8 +62,12 @@ impl RenderBackend for RaqoteBackend {
 }
 
 impl LayerBuilder<LayerId, TextureId> for Vec<RenderOp> {
+    fn push_rect(&mut self, bounds: Bounds, style: FillStyle<TextureId>) {
+        self.push(RenderOp::FillShape(Shape::Rect(bounds), style));
+    }
+
     fn push_triangle(&mut self, a: Pos, b: Pos, c: Pos, style: FillStyle<TextureId>) {
-        self.push(RenderOp::Triangle(a, b, c, style));
+        self.push(RenderOp::FillShape(Shape::Triangle(a, b, c), style));
     }
 
     fn push_layer(&mut self, layer: LayerId) {
@@ -73,20 +77,25 @@ impl LayerBuilder<LayerId, TextureId> for Vec<RenderOp> {
 
 fn render_op(op: &RenderOp, layers: &[Vec<RenderOp>], dt: &mut DrawTarget) {
     match op {
-        RenderOp::Triangle(a, b, c, style) => {
-            let p = {
-                let mut pb = PathBuilder::new();
-                pb.move_to(a.x, a.y);
-                pb.line_to(b.x, b.y);
-                pb.line_to(c.x, c.y);
-                pb.line_to(a.x, a.y);
-                pb.close();
+        RenderOp::FillShape(shape, style) => {
+            let mut pb = PathBuilder::new();
 
-                pb.finish()
-            };
+            match shape {
+                Shape::Triangle(a, b, c) => {
+                    pb.move_to(a.x, a.y);
+                    pb.line_to(b.x, b.y);
+                    pb.line_to(c.x, c.y);
+                    pb.line_to(a.x, a.y);
+                    pb.close();
+                }
+
+                Shape::Rect(bounds) => pb.rect(bounds.a.x, bounds.a.y, bounds.width(), bounds.height()),
+            }
+
+            let path = pb.finish();
 
             match style {
-                FillStyle::SolidColor(color) => dt.fill(&p, &Source::Solid((*color).into()), &DrawOptions::new()),
+                FillStyle::SolidColor(color) => dt.fill(&path, &Source::Solid((*color).into()), &DrawOptions::new()),
 
                 _ => println!("TODO: fill {:?}", style),
             }
@@ -101,8 +110,13 @@ fn render_op(op: &RenderOp, layers: &[Vec<RenderOp>], dt: &mut DrawTarget) {
 }
 
 pub enum RenderOp {
-    Triangle(Pos, Pos, Pos, FillStyle<TextureId>),
+    FillShape(Shape, FillStyle<TextureId>),
     Layer(LayerId),
+}
+
+pub enum Shape {
+    Triangle(Pos, Pos, Pos),
+    Rect(Bounds),
 }
 
 type LayerId = usize;

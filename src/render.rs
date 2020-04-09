@@ -1,4 +1,5 @@
 // x decoupled from layout, styles, ... (commons & utils are allowed)
+// x types & granularity suited for rendering
 // x easy to test (pass vec of bounds)
 // x stateful
 // x no realloc, no ECS -> create resources, return handles
@@ -15,6 +16,9 @@ use std::ops::Index;
 pub struct ContainerId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImageId(usize);
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextId(usize);
 
 // re-export value types
@@ -23,28 +27,30 @@ pub use self::value_types::*;
 
 // and backend
 pub mod backend;
-use self::backend::RenderBackend;
+use self::backend::{FillStyle, LayerBuilder, RenderBackend};
 
-// where `RB` is who does the real work
-// and `LK` is some key to get layout bounds
-pub struct Renderer<RB: RenderBackend, LK> {
+// where:
+// - `RB` is `RenderBackend` implementation
+// - `BK` is some key to get layout bounds
+// - `LK` and `TK` are handles to RB layers/textures
+pub struct Renderer<BK, LK, TK, RB> {
     backend: RB,
-    ui_state: UiState<LK>,
-    keys: Vec<LK>,
+    ui_state: UiState<BK, LK, TK>,
 }
 
-impl<RB: RenderBackend, LK: Copy> Renderer<RB, LK> {
-    pub fn new(backend: RB) -> Self {
+impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerId = LK, TextureId = TK>> Renderer<BK, LK, TK, RB> {
+    pub fn new(mut backend: RB) -> Self {
+        let root_layer = backend.create_layer();
+
         Self {
             backend,
-            ui_state: UiState::new(),
-            keys: Vec::new(),
+            ui_state: UiState::new(root_layer),
         }
     }
 
     // container
-    pub fn create_container(&mut self, layout_key: LK) -> ContainerId {
-        self.ui_state.create_container(layout_key)
+    pub fn create_container(&mut self, bounds_key: BK) -> ContainerId {
+        self.ui_state.create_container(bounds_key)
     }
 
     pub fn insert_child(&mut self, container: ContainerId, index: usize, child: Child) {
@@ -102,28 +108,49 @@ impl<RB: RenderBackend, LK: Copy> Renderer<RB, LK> {
     }
 
     // image
-    // TODO: put it to some existing/new texture (rect-packing)
-    pub fn create_image(width: u32, height: u32) {}
-    pub fn set_image_data() {}
+    pub fn create_image(width: u32, height: u32) -> ImageId {
+        // TODO: put it to some existing/new texture (rect-packing)
+
+        // init with transparent data (but it probably should be for the whole texture)
+        // let data = vec![0; width * height * 4];
+
+        ImageId(999)
+    }
+
+    pub fn set_image_data(&mut self /* data: rgb &[u8] */) {}
 
     // text
-    pub fn create_text() {}
-    pub fn set_text_data(/* TODO: texture + glyphs */) {}
+    pub fn create_text(&mut self) -> TextId {
+        self.ui_state.text_layers.push(self.backend.create_layer());
 
-    pub fn render_container(&mut self, container: ContainerId, bounds: &impl Index<LK, Output = Bounds>) {
-        // TODO: keep ops/pipeline if only transforms were changed
-        self.backend.clear();
+        TextId(self.ui_state.text_layers.len() - 1)
+    }
 
-        let mut ctx = RenderContext {
-            backend: &mut self.backend,
-            ui_state: &self.ui_state,
-            bounds,
-            current_bounds: bounds[self.ui_state.layout_keys[container.0]],
-        };
+    pub fn set_text_data(&mut self /* TODO: texture + glyphs */) {
+        // TODO: rebuild layer
+    }
 
-        ctx.render_container(container);
+    pub fn render_container(&mut self, container: ContainerId, bounds: &impl Index<BK, Output = Bounds>)
+    where
+        <RB as RenderBackend>::LayerBuilder: LayerBuilder<LK, TK>,
+    {
+        let layer = self.ui_state.root_layer;
+        let current_bounds = bounds[self.ui_state.bounds_keys[container.0]];
 
-        self.backend.render();
+        let Self { backend, ui_state, .. } = self;
+
+        self.backend.rebuild_layer_with(layer, |builder| {
+            let mut ctx: RenderContext<_, _, _, RB, _> = RenderContext {
+                builder,
+                ui_state,
+                bounds,
+                current_bounds,
+            };
+
+            ctx.render_container(container);
+        });
+
+        self.backend.render_layer(layer);
     }
 }
 
@@ -131,8 +158,8 @@ impl<RB: RenderBackend, LK: Copy> Renderer<RB, LK> {
 
 // data-oriented storage
 // TODO: BTreeMap, flags, freelists
-struct UiState<LK> {
-    layout_keys: Vec<LK>,
+struct UiState<BK, LK, TK> {
+    bounds_keys: Vec<BK>,
     children: Vec<Vec<Child>>,
     opacities: Vec<f32>,
     border_radii: Vec<Option<BorderRadius>>,
@@ -144,12 +171,16 @@ struct UiState<LK> {
     inset_shadows: Vec<Vec<InsetShadow>>,
     colors: Vec<Color>,
     borders: Vec<Option<Border>>,
+
+    root_layer: LK,
+    text_layers: Vec<LK>,
+    textures: Vec<TK>,
 }
 
-impl<LK: Copy> UiState<LK> {
-    fn new() -> Self {
+impl<BK: Copy, LK: Copy, TK: Copy> UiState<BK, LK, TK> {
+    fn new(root_layer: LK) -> Self {
         Self {
-            layout_keys: Vec::new(),
+            bounds_keys: Vec::new(),
             children: Vec::new(),
             overflows: Vec::new(),
             opacities: Vec::new(),
@@ -161,13 +192,17 @@ impl<LK: Copy> UiState<LK> {
             inset_shadows: Vec::new(),
             colors: Vec::new(),
             borders: Vec::new(),
+
+            root_layer,
+            text_layers: Vec::new(),
+            textures: Vec::new(),
         }
     }
 
-    fn create_container(&mut self, layout_key: LK) -> ContainerId {
+    fn create_container(&mut self, bounds_key: BK) -> ContainerId {
         // TODO: maybe defaults shouldn't be here
         // (accept some ContainerState?)
-        self.layout_keys.push(layout_key);
+        self.bounds_keys.push(bounds_key);
         self.children.push(Vec::new());
         self.overflows.push(Overflow::Visible);
         self.opacities.push(1.);
@@ -184,14 +219,16 @@ impl<LK: Copy> UiState<LK> {
     }
 }
 
-struct RenderContext<'a, RB: RenderBackend, LK, BS: Index<LK, Output = Bounds>> {
-    backend: &'a mut RB,
-    ui_state: &'a UiState<LK>,
+struct RenderContext<'a, BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend, BS: Index<BK, Output = Bounds>> {
+    builder: &'a mut RB::LayerBuilder,
+    ui_state: &'a UiState<BK, LK, TK>,
     bounds: &'a BS,
     current_bounds: Bounds,
 }
 
-impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<'_, RB, LK, BS> {
+impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBuilder<LK, TK>>, BS: Index<BK, Output = Bounds>>
+    RenderContext<'_, BK, LK, TK, RB, BS>
+{
     fn render_container(&mut self, container: ContainerId) {
         // TODO: transform
         // TODO: overflow (scroll)
@@ -226,7 +263,7 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
 
             match ch {
                 Child::Container(child_ct) => {
-                    self.current_bounds = self.bounds[self.ui_state.layout_keys[child_ct.0]].relative_to(self.current_bounds.a);
+                    self.current_bounds = self.bounds[self.ui_state.bounds_keys[child_ct.0]].relative_to(prev_bounds.a);
                     self.render_container(*child_ct);
                 }
                 Child::Text(child_text) => self.render_text(*child_text),
@@ -245,7 +282,8 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
             println!("TODO: OutlineShadow blur");
         }
 
-        self.backend.push_rect(self.current_bounds.inflate_uniform(shadow.spread), shadow.color);
+        self.builder
+            .push_rect(self.current_bounds.inflate_uniform(shadow.spread), FillStyle::Color(shadow.color));
     }
 
     fn render_outline(&mut self, outline: &Outline) {
@@ -253,7 +291,7 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
         let Bounds { a, b } = self.current_bounds;
 
         // top
-        self.backend.push_rect(
+        self.builder.push_rect(
             Bounds {
                 a,
                 b: Pos {
@@ -261,20 +299,20 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
                     y: a.y - width,
                 },
             },
-            color,
+            FillStyle::Color(color),
         );
 
         // right
-        self.backend.push_rect(
+        self.builder.push_rect(
             Bounds {
                 a: Pos { x: b.x + width, y: a.y },
                 b: Pos { x: b.x, y: b.y + width },
             },
-            color,
+            FillStyle::Color(color),
         );
 
         // bottom
-        self.backend.push_rect(
+        self.builder.push_rect(
             Bounds {
                 a: Pos {
                     x: a.x - width,
@@ -282,11 +320,11 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
                 },
                 b,
             },
-            color,
+            FillStyle::Color(color),
         );
 
         // left
-        self.backend.push_rect(
+        self.builder.push_rect(
             Bounds {
                 a: Pos {
                     x: a.x - width,
@@ -294,13 +332,13 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
                 },
                 b: Pos { x: a.x, y: b.y },
             },
-            color,
+            FillStyle::Color(color),
         );
     }
 
     fn render_background_color(&mut self, color: Color) {
         if color.a != 0 {
-            self.backend.push_rect(self.current_bounds, color);
+            self.builder.push_rect(self.current_bounds, FillStyle::Color(color));
         }
     }
 
@@ -334,54 +372,55 @@ impl<RB: RenderBackend, LK: Copy, BS: Index<LK, Output = Bounds>> RenderContext<
 
         if let Some(BorderSide { width, style, color }) = border.top {
             if style == BorderStyle::Solid {
-                self.backend.push_rect(
+                self.builder.push_rect(
                     Bounds {
                         a,
                         b: Pos { x: b.x, y: a.y + width },
                     },
-                    color,
+                    FillStyle::Color(color),
                 )
             }
         }
 
         if let Some(BorderSide { width, style, color }) = border.right {
             if style == BorderStyle::Solid {
-                self.backend.push_rect(
+                self.builder.push_rect(
                     Bounds {
                         a: Pos { x: b.x - width, y: a.y },
                         b,
                     },
-                    color,
+                    FillStyle::Color(color),
                 )
             }
         }
 
         if let Some(BorderSide { width, style, color }) = border.bottom {
             if style == BorderStyle::Solid {
-                self.backend.push_rect(
+                self.builder.push_rect(
                     Bounds {
                         a: Pos { x: a.x, y: b.y - width },
                         b,
                     },
-                    color,
+                    FillStyle::Color(color),
                 )
             }
         }
 
         if let Some(BorderSide { width, style, color }) = border.left {
             if style == BorderStyle::Solid {
-                self.backend.push_rect(
+                self.builder.push_rect(
                     Bounds {
                         a,
                         b: Pos { x: a.x + width, y: b.y },
                     },
-                    color,
+                    FillStyle::Color(color),
                 )
             }
         }
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,7 +617,7 @@ mod tests {
         );
     }
 
-    fn create_test_renderer<LK: Copy>() -> Renderer<TestRenderBackend, LK> {
+    fn create_test_renderer<BK: Copy>() -> Renderer<TestRenderBackend, BK> {
         Renderer::new(TestRenderBackend { log: Vec::new() })
     }
 
@@ -586,7 +625,7 @@ mod tests {
         log: Vec<String>,
     }
 
-    impl RenderBackend for TestRenderBackend {
+    impl RenderBackend<usize, usize> for TestRenderBackend {
         fn clear(&mut self) {
             self.log.push("clear".to_string());
         }
@@ -600,3 +639,4 @@ mod tests {
         }
     }
 }
+*/

@@ -97,7 +97,7 @@ pub enum FillStyle<TK: Copy> {
     // not sure if Msdf can draw sharp triangles/rects (bcof. antialiasing)
     // but this is also more convenient (no need to prepare textures, etc.)
     // so it's probably a good idea to keep it anyway
-    Color(Color),
+    SolidColor(Color),
 
     // images, gradients, shadows, ...
     Texture(TK, Bounds),

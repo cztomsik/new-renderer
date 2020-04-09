@@ -86,7 +86,7 @@ fn render_op(op: &RenderOp, layers: &[Vec<RenderOp>], dt: &mut DrawTarget) {
             };
 
             match style {
-                FillStyle::Color(color) => dt.fill(&p, &Source::Solid((*color).into()), &DrawOptions::new()),
+                FillStyle::SolidColor(color) => dt.fill(&p, &Source::Solid((*color).into()), &DrawOptions::new()),
 
                 _ => println!("TODO: fill {:?}", style),
             }

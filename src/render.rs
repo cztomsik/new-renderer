@@ -283,7 +283,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
         }
 
         self.builder
-            .push_rect(self.current_bounds.inflate_uniform(shadow.spread), FillStyle::Color(shadow.color));
+            .push_rect(self.current_bounds.inflate_uniform(shadow.spread), FillStyle::SolidColor(shadow.color));
     }
 
     fn render_outline(&mut self, outline: &Outline) {
@@ -299,7 +299,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                     y: a.y - width,
                 },
             },
-            FillStyle::Color(color),
+            FillStyle::SolidColor(color),
         );
 
         // right
@@ -308,7 +308,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                 a: Pos { x: b.x + width, y: a.y },
                 b: Pos { x: b.x, y: b.y + width },
             },
-            FillStyle::Color(color),
+            FillStyle::SolidColor(color),
         );
 
         // bottom
@@ -320,7 +320,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                 },
                 b,
             },
-            FillStyle::Color(color),
+            FillStyle::SolidColor(color),
         );
 
         // left
@@ -332,13 +332,13 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                 },
                 b: Pos { x: a.x, y: b.y },
             },
-            FillStyle::Color(color),
+            FillStyle::SolidColor(color),
         );
     }
 
     fn render_background_color(&mut self, color: Color) {
         if color.a != 0 {
-            self.builder.push_rect(self.current_bounds, FillStyle::Color(color));
+            self.builder.push_rect(self.current_bounds, FillStyle::SolidColor(color));
         }
     }
 
@@ -377,7 +377,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                         a,
                         b: Pos { x: b.x, y: a.y + width },
                     },
-                    FillStyle::Color(color),
+                    FillStyle::SolidColor(color),
                 )
             }
         }
@@ -389,7 +389,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                         a: Pos { x: b.x - width, y: a.y },
                         b,
                     },
-                    FillStyle::Color(color),
+                    FillStyle::SolidColor(color),
                 )
             }
         }
@@ -401,7 +401,7 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                         a: Pos { x: a.x, y: b.y - width },
                         b,
                     },
-                    FillStyle::Color(color),
+                    FillStyle::SolidColor(color),
                 )
             }
         }
@@ -413,14 +413,13 @@ impl<BK: Copy, LK: Copy, TK: Copy, RB: RenderBackend<LayerBuilder = impl LayerBu
                         a,
                         b: Pos { x: a.x + width, y: b.y },
                     },
-                    FillStyle::Color(color),
+                    FillStyle::SolidColor(color),
                 )
             }
         }
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,7 +431,7 @@ mod tests {
 
         r.render_container(c, &vec![Bounds::ZERO]);
 
-        assert_eq!(r.backend.log, vec!["clear", "render"]);
+        assert_eq!(r.backend.log, vec!["create_layer", "rebuild_layer 1", "render_layer 1"]);
     }
 
     #[test]
@@ -459,12 +458,13 @@ mod tests {
         assert_eq!(
             r.backend.log,
             vec![
-                "clear",
-                "push_rect Bounds((0.0, 0.0), (101.0, -1.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
-                "push_rect Bounds((101.0, 0.0), (100.0, 101.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
-                "push_rect Bounds((-1.0, 101.0), (100.0, 100.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
-                "push_rect Bounds((-1.0, -1.0), (0.0, 100.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
-                "render"
+                "create_layer",
+                "rebuild_layer 1",
+                "push_rect Bounds((0.0, 0.0), (101.0, -1.0)) SolidColor(#0000ff)",
+                "push_rect Bounds((101.0, 0.0), (100.0, 101.0)) SolidColor(#0000ff)",
+                "push_rect Bounds((-1.0, 101.0), (100.0, 100.0)) SolidColor(#0000ff)",
+                "push_rect Bounds((-1.0, -1.0), (0.0, 100.0)) SolidColor(#0000ff)",
+                "render_layer 1"
             ]
         );
     }
@@ -486,9 +486,10 @@ mod tests {
         assert_eq!(
             r.backend.log,
             vec![
-                "clear",
-                "push_rect Bounds((0.0, 0.0), (100.0, 100.0)) Color { r: 0, g: 255, b: 0, a: 255 }",
-                "render"
+                "create_layer",
+                "rebuild_layer 1",
+                "push_rect Bounds((0.0, 0.0), (100.0, 100.0)) SolidColor(#00ff00)",
+                "render_layer 1"
             ]
         );
     }
@@ -520,9 +521,10 @@ mod tests {
         assert_eq!(
             r.backend.log,
             vec![
-                "clear",
-                "push_rect Bounds((50.0, 50.0), (150.0, 150.0)) Color { r: 255, g: 0, b: 0, a: 255 }",
-                "render"
+                "create_layer",
+                "rebuild_layer 1",
+                "push_rect Bounds((50.0, 50.0), (150.0, 150.0)) SolidColor(#ff0000)",
+                "render_layer 1"
             ]
         );
     }
@@ -602,22 +604,24 @@ mod tests {
         assert_eq!(
             r.backend.log,
             vec![
-                "clear",
-                "push_rect Bounds((0.0, 0.0), (1.0, -1.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
-                "push_rect Bounds((1.0, 0.0), (0.0, 1.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
-                "push_rect Bounds((-1.0, 1.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
-                "push_rect Bounds((-1.0, -1.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
-                "push_rect Bounds((0.0, 0.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 0, a: 255 }",
-                "push_rect Bounds((0.0, 0.0), (0.0, 1.0)) Color { r: 255, g: 0, b: 0, a: 255 }",
-                "push_rect Bounds((-1.0, 0.0), (0.0, 0.0)) Color { r: 0, g: 255, b: 0, a: 255 }",
-                "push_rect Bounds((0.0, -1.0), (0.0, 0.0)) Color { r: 0, g: 0, b: 255, a: 255 }",
-                "push_rect Bounds((0.0, 0.0), (1.0, 0.0)) Color { r: 255, g: 255, b: 0, a: 255 }",
-                "render"
+                "create_layer",
+                "rebuild_layer 1",
+                "push_rect Bounds((-5.0, -5.0), (5.0, 5.0)) SolidColor(#000000)",
+                "push_rect Bounds((0.0, 0.0), (1.0, -1.0)) SolidColor(#000000)",
+                "push_rect Bounds((1.0, 0.0), (0.0, 1.0)) SolidColor(#000000)",
+                "push_rect Bounds((-1.0, 1.0), (0.0, 0.0)) SolidColor(#000000)",
+                "push_rect Bounds((-1.0, -1.0), (0.0, 0.0)) SolidColor(#000000)",
+                "push_rect Bounds((0.0, 0.0), (0.0, 0.0)) SolidColor(#000000)",
+                "push_rect Bounds((0.0, 0.0), (0.0, 1.0)) SolidColor(#ff0000)",
+                "push_rect Bounds((-1.0, 0.0), (0.0, 0.0)) SolidColor(#00ff00)",
+                "push_rect Bounds((0.0, -1.0), (0.0, 0.0)) SolidColor(#0000ff)",
+                "push_rect Bounds((0.0, 0.0), (1.0, 0.0)) SolidColor(#ffff00)",
+                "render_layer 1"
             ]
         );
     }
 
-    fn create_test_renderer<BK: Copy>() -> Renderer<TestRenderBackend, BK> {
+    fn create_test_renderer<BK: Copy>() -> Renderer<BK, usize, usize, TestRenderBackend> {
         Renderer::new(TestRenderBackend { log: Vec::new() })
     }
 
@@ -625,18 +629,49 @@ mod tests {
         log: Vec<String>,
     }
 
-    impl RenderBackend<usize, usize> for TestRenderBackend {
-        fn clear(&mut self) {
-            self.log.push("clear".to_string());
+    impl RenderBackend for TestRenderBackend {
+        type LayerId = usize;
+        type LayerBuilder = Vec<String>;
+        type TextureId = usize;
+
+        fn create_layer(&mut self) -> Self::LayerId {
+            self.log.push("create_layer".to_string());
+
+            self.log.len()
         }
 
-        fn push_rect(&mut self, bounds: Bounds, color: Color) {
-            self.log.push(format!("push_rect {:?} {:?}", &bounds, &color));
+        fn rebuild_layer_with(&mut self, layer: Self::LayerId, mut f: impl FnMut(&mut Self::LayerBuilder)) {
+            self.log.push(format!("rebuild_layer {:?}", layer));
+
+            f(&mut self.log);
         }
 
-        fn render(&mut self) {
-            self.log.push("render".to_string());
+        fn render_layer(&mut self, layer: Self::LayerId) {
+            self.log.push(format!("render_layer {:?}", layer));
+        }
+
+        fn create_texture(&mut self, width: i32, height: i32, data: Box<[u8]>) -> Self::TextureId {
+            self.log.push(format!("create_texture {:?} {:?}", width, height));
+
+            self.log.len()
+        }
+
+        fn update_texture(&mut self, texture: Self::TextureId, f: impl FnMut(&mut [u8])) {
+            self.log.push(format!("update_texture {:?}", texture));
+        }
+    }
+
+    impl LayerBuilder<usize, usize> for Vec<String> {
+        fn push_rect(&mut self, bounds: Bounds, style: FillStyle<usize>) {
+            self.push(format!("push_rect {:?} {:?}", bounds, style));
+        }
+
+        fn push_triangle(&mut self, a: Pos, b: Pos, c: Pos, style: FillStyle<usize>) {
+            self.push(format!("push_triangle {:?} {:?} {:?} {:?}", a, b, c, style));
+        }
+
+        fn push_layer(&mut self, layer: usize) {
+            self.push(format!("push_layer {:?}", layer));
         }
     }
 }
-*/

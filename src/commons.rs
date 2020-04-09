@@ -1,6 +1,6 @@
 // common types & things used everywhere
 
-use std::fmt::{Debug, Error, Formatter};
+use std::fmt::{self, Debug, Formatter};
 
 /// Application unit (or something similar, unit of measure)
 pub type Au = f32;
@@ -31,7 +31,7 @@ impl Pos {
 }
 
 impl Debug for Pos {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_tuple("").field(&self.x).field(&self.y).finish()
     }
 }
@@ -99,7 +99,7 @@ impl Bounds {
 }
 
 impl Debug for Bounds {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_tuple("Bounds").field(&self.a).field(&self.b).finish()
     }
 }

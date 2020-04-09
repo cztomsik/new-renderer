@@ -1,5 +1,6 @@
 use super::{ContainerId, TextId};
 use crate::commons::Pos;
+use std::fmt::{self, Debug, Formatter};
 
 // value types
 // part of the public interface but not necessarily how it's stored internally
@@ -52,7 +53,7 @@ pub enum OutlineStyle {
 /// note that u32 could improve interop or CPU but GPU is float-only
 /// and bitwise ops are slow so it still needs to be unpacked during
 /// `VertexAttribPointer()` as it is done now
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -83,6 +84,16 @@ impl Color {
 
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
+    }
+}
+
+impl Debug for Color {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if self.a == 255 {
+            write!(f, "#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+        } else {
+            write!(f, "#{:02x}{:02x}{:02x}#{:02x}", self.r, self.g, self.b, self.a)
+        }
     }
 }
 

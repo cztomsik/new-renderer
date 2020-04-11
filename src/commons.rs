@@ -12,18 +12,14 @@ pub struct Pos {
     pub y: Au,
 }
 
+// BTW: clippy thinks it's better to pass this by value
 impl Pos {
     pub const ZERO: Pos = Self { x: 0., y: 0. };
+    pub const ONE: Pos = Self { x: 1., y: 1. };
 
-    pub fn mul(&self, n: Au) -> Pos {
-        Pos {
-            x: self.x * n,
-            y: self.y * n,
-        }
-    }
-
-    pub fn relative_to(&self, pos: Pos) -> Pos {
-        Pos {
+    #[inline]
+    pub fn translate(self, pos: Self) -> Self {
+        Self {
             x: self.x + pos.x,
             y: self.y + pos.y,
         }
@@ -56,15 +52,7 @@ impl Bounds {
         self.b.y - self.a.y
     }
 
-    #[must_use]
-    pub fn mul(&self, n: Au) -> Bounds {
-        let a = self.a.mul(n);
-        let b = self.b.mul(n);
-
-        Bounds { a, b }
-    }
-
-    #[must_use]
+    #[inline]
     pub fn inflate_uniform(&self, n: Au) -> Self {
         Self {
             a: Pos {
@@ -78,6 +66,7 @@ impl Bounds {
         }
     }
 
+    #[inline]
     pub fn center(&self) -> Pos {
         Pos {
             x: self.a.x + (self.b.x - self.a.x) / 2.,
@@ -85,14 +74,15 @@ impl Bounds {
         }
     }
 
-    // TODO: rename to `translate`
-    pub fn relative_to(&self, pos: Pos) -> Bounds {
-        let a = self.a.relative_to(pos);
-        let b = self.b.relative_to(pos);
+    #[inline]
+    pub fn translate(&self, pos: Pos) -> Self {
+        let a = self.a.translate(pos);
+        let b = self.b.translate(pos);
 
-        Bounds { a, b }
+        Self { a, b }
     }
 
+    #[inline]
     pub fn contains(&self, pos: Pos) -> bool {
         pos.x > self.a.x && pos.x < self.b.x && pos.y > self.a.y && pos.y < self.b.y
     }

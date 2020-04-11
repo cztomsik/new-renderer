@@ -9,7 +9,7 @@ pub struct RaqoteBackend {
     out_file: String,
     dt: DrawTarget,
     layers: Vec<Vec<RenderOp>>,
-    textures: Vec<Vec<u8>>,
+    textures: Vec<Texture>,
 }
 
 impl RaqoteBackend {
@@ -24,9 +24,9 @@ impl RaqoteBackend {
 }
 
 impl RenderBackend for RaqoteBackend {
-    type LayerId = LayerId;
+    type LayerId = usize;
+    type TextureId = usize;
     type LayerBuilder = Vec<RenderOp>;
-    type TextureId = TextureId;
 
     fn create_layer(&mut self) -> Self::LayerId {
         self.layers.push(Vec::new());
@@ -41,7 +41,7 @@ impl RenderBackend for RaqoteBackend {
     fn render_layer(&mut self, layer: Self::LayerId) {
         //self.dt.clear(Color::BLACK.into());
 
-        render_op(&RenderOp::Layer(layer), &self.layers, &mut self.dt);
+        render_op(&RenderOp::Layer(layer, Pos::ZERO), &self.layers, &self.textures, &mut self.dt);
 
         // TODO: render
         //let _data = self.dt.get_data();
@@ -51,67 +51,74 @@ impl RenderBackend for RaqoteBackend {
 
     fn create_texture(&mut self, width: i32, height: i32, data: Box<[u8]>) -> Self::TextureId {
         assert_eq!(data.len() as i32, width * height * 4, "invalid texture data len");
-        self.textures.push(data.into());
+        self.textures.push(Texture { width, height, data });
 
         self.textures.len() - 1
     }
 
     fn update_texture(&mut self, texture: Self::TextureId, mut f: impl FnMut(&mut [u8])) {
-        f(&mut self.textures[texture]);
+        f(&mut self.textures[texture].data);
     }
 }
 
-impl LayerBuilder<LayerId, TextureId> for Vec<RenderOp> {
-    fn push_rect(&mut self, bounds: Bounds, style: FillStyle<TextureId>) {
-        self.push(RenderOp::FillShape(Shape::Rect(bounds), style));
+impl LayerBuilder<RaqoteBackend> for Vec<RenderOp> {
+    fn push_rect(&mut self, bounds: Bounds, style: FillStyle<RaqoteBackend>) {
+        self.push(RenderOp::FillRect(bounds, style));
     }
 
-    fn push_triangle(&mut self, a: Pos, b: Pos, c: Pos, style: FillStyle<TextureId>) {
-        self.push(RenderOp::FillShape(Shape::Triangle(a, b, c), style));
-    }
-
-    fn push_layer(&mut self, layer: LayerId) {
-        self.push(RenderOp::Layer(layer));
+    fn push_layer(&mut self, layer: <RaqoteBackend as RenderBackend>::LayerId, origin: Pos) {
+        self.push(RenderOp::Layer(layer, origin));
     }
 }
 
-fn render_op(op: &RenderOp, layers: &[Vec<RenderOp>], dt: &mut DrawTarget) {
+fn render_op(op: &RenderOp, layers: &[Vec<RenderOp>], textures: &[Texture], dt: &mut DrawTarget) {
     match op {
-        RenderOp::FillShape(shape, style) => {
-            let mut pb = PathBuilder::new();
+        RenderOp::FillRect(bounds, style) => {
+            let path = {
+                let mut pb = PathBuilder::new();
+                pb.rect(bounds.a.x, bounds.a.y, bounds.width(), bounds.height());
+                pb.close();
+                pb.finish()
+            };
 
-            match shape {
-                Shape::Triangle(a, b, c) => {
-                    pb.move_to(a.x, a.y);
-                    pb.line_to(b.x, b.y);
-                    pb.line_to(c.x, c.y);
-                    pb.line_to(a.x, a.y);
-                    pb.close();
+            // fill style
+            let source = match style {
+                FillStyle::SolidColor(color) => Source::Solid((*color).into()),
+
+                FillStyle::Texture(texture, uv) => {
+                    let Texture { width, height, ref data } = textures[*texture];
+                    let data = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u32, data.len() / 4) };
+
+                    let (w, h) = (width as f32, height as f32);
+                    let transform = Transform::create_translation((uv.a.x * w) - bounds.a.x, (uv.a.y * h) - bounds.a.y)
+                        .post_scale((uv.width() * w) / bounds.width(), (uv.height() * h) / bounds.height());
+
+                    Source::Image(Image { width, height, data }, ExtendMode::Pad, FilterMode::Nearest, transform)
                 }
 
-                Shape::Rect(bounds) => pb.rect(bounds.a.x, bounds.a.y, bounds.width(), bounds.height()),
-            }
+                FillStyle::Msdf { .. } => panic!("TODO: msdf"),
+            };
 
-            let path = pb.finish();
-
-            match style {
-                FillStyle::SolidColor(color) => dt.fill(&path, &Source::Solid((*color).into()), &DrawOptions::new()),
-
-                _ => println!("TODO: fill {:?}", style),
-            }
+            dt.fill(&path, &source, &DrawOptions::new());
         }
 
-        RenderOp::Layer(id) => {
+        RenderOp::Layer(id, origin) => {
+            let prev_transform = *dt.get_transform();
+
+            dt.set_transform(&prev_transform.post_translate(euclid::vec2(origin.x, origin.y)));
+
             for op in &layers[*id] {
-                render_op(op, layers, dt);
+                render_op(op, layers, textures, dt);
             }
+
+            dt.set_transform(&prev_transform);
         }
     }
 }
 
 pub enum RenderOp {
-    FillShape(Shape, FillStyle<TextureId>),
-    Layer(LayerId),
+    FillRect(Bounds, FillStyle<RaqoteBackend>),
+    Layer(<RaqoteBackend as RenderBackend>::LayerId, Pos),
 }
 
 pub enum Shape {
@@ -119,8 +126,11 @@ pub enum Shape {
     Rect(Bounds),
 }
 
-type LayerId = usize;
-type TextureId = usize;
+pub struct Texture {
+    width: i32,
+    height: i32,
+    data: Box<[u8]>,
+}
 
 impl Into<SolidSource> for Color {
     fn into(self) -> SolidSource {

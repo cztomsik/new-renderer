@@ -1,1 +1,5 @@
-max_width = 150
+# otherwise it's too blocky
+max_width = 165
+
+use_field_init_shorthand = true
+use_try_shorthand = true

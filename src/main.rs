@@ -6,14 +6,23 @@ mod render;
 
 use crate::commons::{Bounds, Pos};
 use crate::render::backend::raqote::RaqoteBackend;
-use crate::render::{Border, BorderSide, BorderStyle, Child, Color, Outline, OutlineShadow, OutlineStyle, Renderer};
+use crate::render::{BackgroundImage, Border, BorderSide, BorderStyle, Child, Color, Outline, OutlineShadow, OutlineStyle, Renderer};
 
 fn main() {
     let mut r = Renderer::new(RaqoteBackend::new("out.png".to_string(), 800, 600));
-    let parent = r.create_container(0);
-    let child = r.create_container(1);
 
-    r.insert_child(parent, 0, Child::Container(child));
+    let image = r.create_image(64, 64, gen_checkerboard(64, 64, 16));
+
+    let parent = r.create_container(0);
+    let child1 = r.create_container(1);
+    let child2 = r.create_container(2);
+    let text = r.create_text(3);
+
+    r.set_text_data(text, "Hello".to_string());
+
+    r.insert_child(parent, 0, Child::Container(child1));
+    r.insert_child(parent, 1, Child::Container(child2));
+    r.insert_child(parent, 2, Child::Text(text));
 
     r.set_background_color(parent, Color::RED);
     r.set_border(
@@ -30,9 +39,9 @@ fn main() {
         }),
     );
 
-    r.set_background_color(child, Color::GREEN);
+    r.set_background_color(child1, Color::GREEN);
     r.set_outline(
-        child,
+        child1,
         Some(Outline {
             width: 1.,
             style: OutlineStyle::Solid,
@@ -40,31 +49,33 @@ fn main() {
         }),
     );
     r.set_outline_shadows(
-        child,
+        child1,
         vec![OutlineShadow {
             offset: Pos::ZERO,
             blur: 0.,
             spread: 5.,
-            color: Color {
-                r: 127,
-                g: 127,
-                b: 127,
-                a: 127,
-            },
+            color: Color { r: 127, g: 127, b: 127, a: 127 },
         }],
     );
+
+    r.set_background_images(child2, vec![BackgroundImage::Image { image }]);
 
     r.render_container(
         parent,
         &vec![
             Bounds {
-                a: Pos::ZERO,
-                b: Pos { x: 100., y: 100. },
+                a: Pos { x: 50., y: 50. },
+                b: Pos { x: 550., y: 550. },
+            },
+            Bounds {
+                a: Pos { x: 350., y: 50. },
+                b: Pos { x: 450., y: 150. },
             },
             Bounds {
                 a: Pos { x: 50., y: 50. },
-                b: Pos { x: 150., y: 150. },
+                b: Pos { x: 200., y: 200. },
             },
+            Bounds::ZERO,
         ],
     );
 
@@ -88,4 +99,18 @@ fn main() {
             }
         }
     */
+}
+
+// square_size has to be power of 2
+fn gen_checkerboard(width: usize, height: usize, square_size: usize) -> Box<[u8]> {
+    let mut data = Vec::new();
+
+    for y in 0..height {
+        for x in 0..width {
+            let v = if x & square_size != y & square_size { 0xFF } else { 0x00 };
+            data.extend(vec![v, v, v, 0xFF]);
+        }
+    }
+
+    data.into_boxed_slice()
 }

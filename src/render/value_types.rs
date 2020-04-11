@@ -1,4 +1,4 @@
-use super::{ContainerId, TextId};
+use super::{ContainerId, ImageId, TextId};
 use crate::commons::Pos;
 use std::fmt::{self, Debug, Formatter};
 
@@ -64,27 +64,13 @@ pub struct Color {
 impl Color {
     pub const TRANSPARENT: Color = Self { r: 0, g: 0, b: 0, a: 0 };
     pub const BLACK: Color = Self { r: 0, g: 0, b: 0, a: 255 };
-    pub const WHITE: Color = Self {
-        r: 255,
-        g: 255,
-        b: 255,
-        a: 255,
-    };
+    pub const WHITE: Color = Self { r: 255, g: 255, b: 255, a: 255 };
 
     // just to make testing & prototyping a bit easier
     pub const RED: Color = Self { r: 255, g: 0, b: 0, a: 255 };
     pub const GREEN: Color = Self { r: 0, g: 255, b: 0, a: 255 };
     pub const BLUE: Color = Self { r: 0, g: 0, b: 255, a: 255 };
-    pub const YELLOW: Color = Self {
-        r: 255,
-        g: 255,
-        b: 0,
-        a: 255,
-    };
-
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self { r, g, b, a }
-    }
+    pub const YELLOW: Color = Self { r: 255, g: 255, b: 0, a: 255 };
 }
 
 impl Debug for Color {
@@ -99,7 +85,7 @@ impl Debug for Color {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BackgroundImage {
-    Image {},
+    Image { image: ImageId },
     LinearGradient {},
     RadialGradient {},
 }
